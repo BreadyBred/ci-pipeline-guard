@@ -13,3 +13,5 @@ pip install -r requirements.txt
 ```
 
 No additional setup required. The scanner runs fully offline.
+
+Requires **Python 3.12+**. Dependencies: PyYAML, Rich, Click, Pydantic.
