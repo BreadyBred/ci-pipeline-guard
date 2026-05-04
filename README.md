@@ -29,3 +29,13 @@ Requires **Python 3.12+**. Dependencies: PyYAML, Rich, Click, Pydantic.
 | GHA-003 | CRITICAL | `pull_request_target` trigger combined with PR head checkout |
 | GHA-004 | MEDIUM | Self-hosted runner with no scoping labels |
 | GHA-005 | MEDIUM | `continue-on-error: true` on a security-named job |
+
+### GitLab CI
+
+| ID | Severity | Description |
+|---|---|---|
+| GLC-001 | CRITICAL | `privileged: true` in a job or service definition |
+| GLC-002 | MEDIUM | Docker image uses `:latest` tag or has no tag |
+| GLC-003 | CRITICAL | Plaintext secret literal in a `variables` block |
+| GLC-004 | MEDIUM | `allow_failure: true` on a security-named job |
+| GLC-005 | HIGH | Remote content piped directly to shell (`curl|bash`, `wget|sh`) |
