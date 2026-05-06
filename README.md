@@ -39,3 +39,22 @@ Requires **Python 3.12+**. Dependencies: PyYAML, Rich, Click, Pydantic.
 | GLC-003 | CRITICAL | Plaintext secret literal in a `variables` block |
 | GLC-004 | MEDIUM | `allow_failure: true` on a security-named job |
 | GLC-005 | HIGH | Remote content piped directly to shell (`curl|bash`, `wget|sh`) |
+
+---
+
+## Security score
+
+Each finding deducts from a base score of 100:
+
+| Severity | Penalty |
+|---|---|
+| CRITICAL | 20 |
+| HIGH | 10 |
+| MEDIUM | 5 |
+
+Score is floored at 0. A clean pipeline scores 100.
+
+## Output formats
+
+Use `--format table` (default) for a Rich terminal table, or `--format json`
+to get machine-readable output.
