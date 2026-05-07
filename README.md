@@ -58,3 +58,29 @@ Score is floored at 0. A clean pipeline scores 100.
 
 Use `--format table` (default) for a Rich terminal table, or `--format json`
 to get machine-readable output.
+
+---
+
+## Usage
+
+```
+python -m cipguard scan PATH [--format table|json] [--output FILE]
+```
+
+Scan a single file:
+
+```
+python -m cipguard scan .github/workflows/ci.yml
+```
+
+Scan an entire repository (recursive):
+
+```
+python -m cipguard scan /path/to/repo
+```
+
+Write JSON results to a file:
+
+```
+python -m cipguard scan . --format json --output results.json
+```
