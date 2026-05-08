@@ -84,3 +84,20 @@ Write JSON results to a file:
 ```
 python -m cipguard scan . --format json --output results.json
 ```
+
+---
+
+## Running tests
+
+Install dev dependencies, then run the full suite:
+
+```
+pip install -r requirements.txt
+pytest
+```
+
+Run with coverage:
+
+```
+pytest --cov=cipguard --cov-report=term-missing
+```

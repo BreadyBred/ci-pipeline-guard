@@ -1,0 +1,46 @@
+name: CI Pipeline
+
+# PyYAML 1.1 parses bare 'on' as boolean True - this is expected behaviour
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    branches: [main]
+
+env:
+  DATABASE_PASSWORD: "hardcoded_s3cret_do_not_ship"   # GHA-002: literal secret
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v3             # GHA-001: tag, not SHA
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}  # GHA-003: dangerous with pull_request_target
+
+      - name: Setup Node
+        uses: actions/setup-node@main         # GHA-001: branch ref
+        with:
+          node-version: 18
+
+      - name: Install
+        run: npm ci
+
+      # Correctly pinned - must NOT be flagged by GHA-001
+      - name: Upload artifact
+        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+        with:
+          name: dist
+          path: dist/
+
+  security-scan:                              # GHA-005: name matches security pattern
+    runs-on: self-hosted                      # GHA-004: bare self-hosted, no labels
+    continue-on-error: true                   # GHA-005
+    env:
+      API_KEY: "sk-prod-abc123xyz987"         # GHA-002: literal secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3fbd2bd1-8b67-437f-ba4a-ddef2c2d8f2d  # GHA-001: UUID not SHA
+      - name: SAST scan
+        run: npm run sast

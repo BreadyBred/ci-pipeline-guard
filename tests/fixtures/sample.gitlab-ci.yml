@@ -1,0 +1,42 @@
+image: ubuntu:latest              # GLC-002: mutable :latest tag
+
+variables:
+  DATABASE_PASSWORD: "super_secret_prod_abc123"   # GLC-003: hardcoded secret
+  API_TOKEN: "glpat-xYzAbC987654"                  # GLC-003: hardcoded token
+  DEPLOY_ENV: production                           # benign - no match
+
+stages:
+  - build
+  - test
+  - security
+  - deploy
+
+build-app:
+  stage: build
+  image: python                  # GLC-002: no tag at all
+  script:
+    - pip install -r requirements.txt
+    - curl https://get.install.example.com/setup | bash   # GLC-005: pipe to shell
+
+dependency-audit:
+  stage: test
+  image:
+    name: owasp/dependency-check:latest   # GLC-002: :latest inside dict form
+    entrypoint: ["/bin/sh", "-c"]
+  script:
+    - /usr/share/dependency-check/bin/dependency-check.sh --scan .
+
+security-lint:                   # GLC-004: name matches security pattern
+  stage: security
+  allow_failure: true            # GLC-004
+  script:
+    - bandit -r src/
+
+privileged-build:
+  stage: build
+  image: docker:24.0             # correctly tagged - must NOT be flagged
+  script:
+    - docker build -t myapp:${CI_COMMIT_SHORT_SHA} .
+  services:
+    - name: docker:24.0-dind
+      privileged: true           # GLC-001: privileged service
