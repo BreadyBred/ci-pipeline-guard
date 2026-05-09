@@ -471,3 +471,49 @@ def test_glc005_non_string_command_in_list_skipped() -> None:
     data = {"build": {"script": [None, {"nested": "dict"}, "make"]}}
     findings = check_glc005(data, [], "fake.yml")
     assert not findings
+
+
+# ---------------------------------------------------------------------------
+# Crash guards — malformed YAML must never raise (CB-1, CB-2, CB-3)
+# ---------------------------------------------------------------------------
+
+
+def test_gha001_non_dict_job_does_not_crash() -> None:
+    """A jobs block where a value is not a dict must not raise."""
+    data = {"jobs": {"build": None, "test": "string-job"}}
+    findings = check_gha001(data, [], "fake.yml")
+    assert findings == []
+
+
+def test_gha002_non_dict_env_does_not_crash() -> None:
+    """An env block that is a list instead of a dict must not raise."""
+    data = {
+        "env": ["not", "a", "dict"],
+        "jobs": {
+            "build": {
+                "env": "also-not-a-dict",
+                "steps": [{"env": 42, "run": "echo hi"}],
+            }
+        },
+    }
+    findings = check_gha002(data, [], "fake.yml")
+    assert findings == []
+
+
+def test_gha003_with_non_dict_does_not_crash() -> None:
+    """A step where 'with' is a plain string must not raise (CB-2)."""
+    data = {
+        True: "pull_request_target",
+        "jobs": {
+            "ci": {
+                "steps": [
+                    {
+                        "uses": "actions/checkout@v3",
+                        "with": "ref: ${{ github.event.pull_request.head.sha }}",
+                    }
+                ]
+            }
+        },
+    }
+    findings = check_gha003(data, ["pull_request_target"], "fake.yml")
+    assert not findings

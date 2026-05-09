@@ -10,23 +10,42 @@ from cipguard.utils import (
 )
 
 
+def _get_github_jobs(data: dict) -> dict[str, dict]:
+    """Return job entries that are dicts (skip None or non-dict values)."""
+    return {
+        name: job
+        for name, job in (data.get("jobs") or {}).items()
+        if isinstance(job, dict)
+    }
+
+
 def _iter_env_blocks(data: dict):
     """Yield (key, value, context_label) from all env blocks in the workflow."""
-    for k, v in (data.get("env") or {}).items():
-        yield k, v, "workflow env"
-    for job_name, job in (data.get("jobs") or {}).items():
-        for k, v in (job.get("env") or {}).items():
-            yield k, v, f"job {job_name!r} env"
+    env = data.get("env")
+    if isinstance(env, dict):
+        for k, v in env.items():
+            yield k, v, "workflow env"
+    for job_name, job in _get_github_jobs(data).items():
+        job_env = job.get("env")
+        if isinstance(job_env, dict):
+            for k, v in job_env.items():
+                yield k, v, f"job {job_name!r} env"
         for step in job.get("steps") or []:
-            for k, v in (step.get("env") or {}).items():
-                yield k, v, f"job {job_name!r} step env"
+            if not isinstance(step, dict):
+                continue
+            step_env = step.get("env")
+            if isinstance(step_env, dict):
+                for k, v in step_env.items():
+                    yield k, v, f"job {job_name!r} step env"
 
 
 def check_gha001(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GHA-001: Action not pinned to a full 40-character commit SHA."""
     findings: list[Finding] = []
-    for _job_name, job in (data.get("jobs") or {}).items():
+    for _job_name, job in _get_github_jobs(data).items():
         for step in job.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
             uses = step.get("uses", "")
             if not uses:
                 continue
@@ -98,11 +117,16 @@ def check_gha003(data: dict, lines: list[str], file: str) -> list[Finding]:
         return []
 
     findings: list[Finding] = []
-    for job_name, job in (data.get("jobs") or {}).items():
+    for job_name, job in _get_github_jobs(data).items():
         for step in job.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
             if "actions/checkout" not in step.get("uses", ""):
                 continue
-            ref = str((step.get("with") or {}).get("ref", ""))
+            with_val = step.get("with")
+            if not isinstance(with_val, dict):
+                continue
+            ref = str(with_val.get("ref", ""))
             if "head.sha" in ref or "head.ref" in ref:
                 line = find_line(lines, "pull_request_target")
                 findings.append(
@@ -128,9 +152,14 @@ def check_gha004(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GHA-004: Self-hosted runner with no scoping labels."""
     findings: list[Finding] = []
     search_from = 0
-    for job_name, job in (data.get("jobs") or {}).items():
+    for job_name, job in _get_github_jobs(data).items():
         runs_on = job.get("runs-on")
         plain_self_hosted = runs_on == "self-hosted" or runs_on == ["self-hosted"]
+        has_self_hosted = (
+            isinstance(runs_on, list)
+            and "self-hosted" in runs_on
+            and len(runs_on) > 1
+        )
         if plain_self_hosted:
             line = find_line(lines, "self-hosted", search_from)
             if line is not None:
@@ -154,7 +183,7 @@ def check_gha004(data: dict, lines: list[str], file: str) -> list[Finding]:
 def check_gha005(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GHA-005: continue-on-error: true on a security-related job."""
     findings: list[Finding] = []
-    for job_name, job in (data.get("jobs") or {}).items():
+    for job_name, job in _get_github_jobs(data).items():
         if not SECURITY_NAME_RE.search(str(job_name)):
             continue
         if job.get("continue-on-error") is True:
