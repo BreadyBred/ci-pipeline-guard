@@ -160,6 +160,10 @@ def check_gha004(data: dict, lines: list[str], file: str) -> list[Finding]:
             and "self-hosted" in runs_on
             and len(runs_on) > 1
         )
+        if has_self_hosted:
+            line = find_line(lines, "self-hosted", search_from)
+            if line is not None:
+                search_from = line
         if plain_self_hosted:
             line = find_line(lines, "self-hosted", search_from)
             if line is not None:
@@ -183,11 +187,14 @@ def check_gha004(data: dict, lines: list[str], file: str) -> list[Finding]:
 def check_gha005(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GHA-005: continue-on-error: true on a security-related job."""
     findings: list[Finding] = []
+    search_from = 0
     for job_name, job in _get_github_jobs(data).items():
         if not SECURITY_NAME_RE.search(str(job_name)):
             continue
         if job.get("continue-on-error") is True:
-            line = find_line(lines, "continue-on-error")
+            line = find_line(lines, "continue-on-error: true", search_from)
+            if line is not None:
+                search_from = line
             findings.append(
                 Finding(
                     rule_id="GHA-005",

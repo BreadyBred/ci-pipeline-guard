@@ -69,6 +69,8 @@ def find_line(lines: list[str], needle: str, start: int = 0) -> int | None:
     after a previously found line.
     """
     for i, line in enumerate(lines[start:], start + 1):
+        if line.lstrip().startswith("#"):
+            continue
         if needle in line:
             return i
     return None

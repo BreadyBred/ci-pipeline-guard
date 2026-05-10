@@ -15,6 +15,7 @@ def _check_image(
     file: str,
     lines: list[str],
     context: str,
+    start: int = 0,
 ) -> Finding | None:
     """Return a GLC-002 finding if image is untagged or uses :latest."""
     if isinstance(image, dict):
@@ -28,7 +29,7 @@ def _check_image(
         return None
 
     if ":" not in name:
-        line = find_line(lines, name)
+        line = find_line(lines, name, start)
         return Finding(
             rule_id="GLC-002",
             severity=Severity.MEDIUM,
@@ -39,7 +40,7 @@ def _check_image(
         )
 
     if name.endswith(":latest"):
-        line = find_line(lines, name)
+        line = find_line(lines, name, start)
         return Finding(
             rule_id="GLC-002",
             severity=Severity.MEDIUM,
@@ -58,7 +59,7 @@ def check_glc001(data: dict, lines: list[str], file: str) -> list[Finding]:
     search_from = 0
     for job_name, job in get_gitlab_jobs(data).items():
         if job.get("privileged") is True:
-            line = find_line(lines, "privileged", search_from)
+            line = find_line(lines, "privileged: true", search_from)
             if line is not None:
                 search_from = line
             findings.append(
@@ -76,7 +77,7 @@ def check_glc001(data: dict, lines: list[str], file: str) -> list[Finding]:
             )
         for svc in job.get("services") or []:
             if isinstance(svc, dict) and svc.get("privileged") is True:
-                line = find_line(lines, "privileged", search_from)
+                line = find_line(lines, "privileged: true", search_from)
                 if line is not None:
                     search_from = line
                 findings.append(
@@ -95,18 +96,23 @@ def check_glc001(data: dict, lines: list[str], file: str) -> list[Finding]:
 def check_glc002(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GLC-002: Image tag is :latest or entirely absent."""
     findings: list[Finding] = []
+    search_from = 0
 
     global_image = data.get("image")
     if global_image:
-        f = _check_image(global_image, file, lines, "global image")
+        f = _check_image(global_image, file, lines, "global image", search_from)
         if f:
+            if f.line is not None:
+                search_from = f.line
             findings.append(f)
 
     for job_name, job in get_gitlab_jobs(data).items():
         image = job.get("image")
         if image:
-            f = _check_image(image, file, lines, f"job '{job_name}'")
+            f = _check_image(image, file, lines, f"job '{job_name}'", search_from)
             if f:
+                if f.line is not None:
+                    search_from = f.line
                 findings.append(f)
 
     return findings
@@ -149,11 +155,14 @@ def check_glc003(data: dict, lines: list[str], file: str) -> list[Finding]:
 def check_glc004(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GLC-004: allow_failure: true on a security-related job."""
     findings: list[Finding] = []
+    search_from = 0
     for job_name, job in get_gitlab_jobs(data).items():
         if not SECURITY_NAME_RE.search(str(job_name)):
             continue
         if job.get("allow_failure") is True:
-            line = find_line(lines, "allow_failure")
+            line = find_line(lines, "allow_failure: true", search_from)
+            if line is not None:
+                search_from = line
             findings.append(
                 Finding(
                     rule_id="GLC-004",
@@ -185,7 +194,7 @@ def check_glc005(data: dict, lines: list[str], file: str) -> list[Finding]:
             if not isinstance(cmd, str):
                 continue
             if PIPE_EXEC_RE.search(cmd):
-                needle = cmd.strip()[:40]
+                needle = (cmd.strip().splitlines() or [""])[0][:40]
                 line = find_line(lines, needle)
                 findings.append(
                     Finding(
@@ -195,7 +204,7 @@ def check_glc005(data: dict, lines: list[str], file: str) -> list[Finding]:
                         line=line,
                         finding=(
                             f"Job '{job_name}' pipes remote content to shell: "
-                            f"{cmd.strip()[:80]}"
+                            f"{cmd.strip().replace(chr(10), ' ')[:80]}"
                         ),
                         recommendation=(
                             "Download the script first, verify its checksum, "
