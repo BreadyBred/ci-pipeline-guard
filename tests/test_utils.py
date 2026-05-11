@@ -7,6 +7,8 @@ import pytest
 from cipguard.utils import (
     MAX_FILE_BYTES,
     SECRET_KEY_RE,
+    SECURITY_NAME_RE,
+    SHA_RE,
     detect_ci_format,
     discover_files,
     find_line,
@@ -245,3 +247,65 @@ def test_secret_key_re_matches_real_secret_keys(key: str) -> None:
 ])
 def test_secret_key_re_rejects_false_positives(key: str) -> None:
     assert not SECRET_KEY_RE.search(key), f"Unexpected match for {key!r}"
+
+
+# ---------------------------------------------------------------------------
+# SHA_RE — case-insensitive hex acceptance (FP-2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("sha", [
+    "a" * 40,                          # all lowercase
+    "A" * 40,                          # all uppercase
+    ("aAbBcCdDeEfF" * 4)[:40],         # mixed case, 40 chars
+    "0123456789abcdef" * 2 + "01234567",  # numeric + lower
+])
+def test_sha_re_accepts_valid_40char_shas(sha: str) -> None:
+    assert SHA_RE.match(sha), f"Expected SHA_RE to accept {sha!r}"
+
+
+@pytest.mark.parametrize("ref", [
+    "v3",
+    "main",
+    "a" * 39,        # one char short
+    "a" * 41,        # one char long
+    "g" * 40,        # invalid hex char
+    "",
+])
+def test_sha_re_rejects_non_shas(ref: str) -> None:
+    assert not SHA_RE.match(ref), f"Expected SHA_RE to reject {ref!r}"
+
+
+# ---------------------------------------------------------------------------
+# SECURITY_NAME_RE — delimiter-aware boundary (FP-1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", [
+    "security",
+    "security-scan",
+    "scan-results",
+    "sast",
+    "sast-check",
+    "run-audit",
+    "lint",
+    "lint-check",
+    "my-security",
+    "security_scan",
+    "audit_job",
+])
+def test_security_name_re_matches_security_job_names(name: str) -> None:
+    assert SECURITY_NAME_RE.search(name), f"Expected SECURITY_NAME_RE to match {name!r}"
+
+
+@pytest.mark.parametrize("name", [
+    "eslint",
+    "eslint-check",
+    "document-scanner",
+    "scanner-results",
+    "consultancy",
+    "secretariat",
+    "lintel",
+])
+def test_security_name_re_rejects_false_positives(name: str) -> None:
+    assert not SECURITY_NAME_RE.search(name), f"Unexpected match for {name!r}"

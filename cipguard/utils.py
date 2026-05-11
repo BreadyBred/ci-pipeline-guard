@@ -11,7 +11,7 @@ SECRET_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 # Matches: curl/wget ... | bash/sh  including /bin/bash and /bin/sh paths
 PIPE_EXEC_RE = re.compile(
@@ -20,7 +20,7 @@ PIPE_EXEC_RE = re.compile(
 )
 
 SECURITY_NAME_RE = re.compile(
-    r"security|scan|sast|audit|lint",
+    r"(?:^|[-_])(?:security|scan|sast|audit|lint)(?:[-_]|$)",
     re.IGNORECASE,
 )
 

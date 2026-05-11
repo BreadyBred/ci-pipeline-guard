@@ -517,3 +517,37 @@ def test_gha003_with_non_dict_does_not_crash() -> None:
     }
     findings = check_gha003(data, ["pull_request_target"], "fake.yml")
     assert not findings
+
+
+# ---------------------------------------------------------------------------
+# False-positive guards — delimiter-aware SECURITY_NAME_RE (FP-1)
+# ---------------------------------------------------------------------------
+
+
+def test_gha005_eslint_job_not_flagged() -> None:
+    """A job named 'eslint-check' must not trigger GHA-005 (FP-1: 'lint' substring)."""
+    data = {
+        "jobs": {
+            "eslint-check": {"continue-on-error": True, "steps": []},
+        }
+    }
+    findings = check_gha005(data, [], "fake.yml")
+    assert not findings
+
+
+def test_glc004_document_scanner_not_flagged() -> None:
+    """A job named 'document-scanner' must not trigger GLC-004 (FP-1: 'scan' substring)."""
+    data = {"document-scanner": {"allow_failure": True, "script": ["./scan-docs.sh"]}}
+    findings = check_glc004(data, [], "fake.yml")
+    assert not findings
+
+
+def test_gha005_security_scan_job_still_flagged() -> None:
+    """A job named 'security-scan' must still be flagged after FP-1 fix."""
+    data = {
+        "jobs": {
+            "security-scan": {"continue-on-error": True, "steps": []},
+        }
+    }
+    findings = check_gha005(data, ["continue-on-error: true"], "fake.yml")
+    assert any(f.rule_id == "GHA-005" for f in findings)
