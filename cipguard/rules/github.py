@@ -10,6 +10,24 @@ from cipguard.utils import (
 )
 
 
+def _find_uses_line(lines: list[str], uses: str) -> int | None:
+    """Return the 1-based line number of a 'uses: <uses>' occurrence.
+
+    Scans for a line containing the full uses string.  When the action is
+    pinned (contains '@'), we must not land on a line where the name portion
+    appears before a different '@' (e.g. the pinned variant of the same action).
+    """
+    action_name = uses.split("@")[0] if "@" in uses else uses
+    for i, line in enumerate(lines, 1):
+        if uses in line:
+            return i
+        # For unpinned refs: accept a line that contains the action name
+        # followed by '@' only if the full 'uses' string wasn't found above.
+    # Fallback: just find the action name
+    from cipguard.utils import find_line
+    return find_line(lines, action_name)
+
+
 def _get_github_jobs(data: dict) -> dict[str, dict]:
     """Return job entries that are dicts (skip None or non-dict values)."""
     return {
@@ -42,6 +60,7 @@ def _iter_env_blocks(data: dict):
 def check_gha001(data: dict, lines: list[str], file: str) -> list[Finding]:
     """GHA-001: Action not pinned to a full 40-character commit SHA."""
     findings: list[Finding] = []
+    seen: set[tuple[str, int | None]] = set()
     for _job_name, job in _get_github_jobs(data).items():
         for step in job.get("steps") or []:
             if not isinstance(step, dict):
@@ -52,16 +71,20 @@ def check_gha001(data: dict, lines: list[str], file: str) -> list[Finding]:
             if uses.startswith("./") or uses.startswith("docker://"):
                 continue
             if "@" not in uses:
-                line = find_line(lines, uses)
+                line = _find_uses_line(lines, uses)
                 msg = f"Action '{uses}' has no version pin at all"
                 rec = "Pin to a full 40-character commit SHA, e.g. actions/checkout@<sha>"
             else:
                 ref = uses.split("@", 1)[1]
                 if SHA_RE.match(ref):
                     continue
-                line = find_line(lines, uses)
+                line = _find_uses_line(lines, uses)
                 msg = f"Action '{uses}' pinned to '{ref}' instead of a full commit SHA"
                 rec = "Pin to a full 40-character commit SHA to prevent supply chain attacks"
+            key = (uses, line)
+            if key in seen:
+                continue
+            seen.add(key)
             findings.append(
                 Finding(
                     rule_id="GHA-001",

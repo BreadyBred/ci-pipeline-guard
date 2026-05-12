@@ -551,3 +551,22 @@ def test_gha005_security_scan_job_still_flagged() -> None:
     }
     findings = check_gha005(data, ["continue-on-error: true"], "fake.yml")
     assert any(f.rule_id == "GHA-005" for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# Uppercase SHA must not be flagged as unpinned (FP-2)
+# ---------------------------------------------------------------------------
+
+
+def test_gha001_uppercase_sha_not_flagged() -> None:
+    """A 40-char hex SHA with uppercase letters must be accepted as a valid pin (FP-2)."""
+    sha = "A" * 20 + "b" * 20  # mixed case, 40 chars
+    data = {
+        "jobs": {
+            "build": {
+                "steps": [{"uses": f"actions/checkout@{sha}"}],
+            }
+        }
+    }
+    findings = check_gha001(data, [], "fake.yml")
+    assert not findings
