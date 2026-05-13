@@ -570,3 +570,22 @@ def test_gha001_uppercase_sha_not_flagged() -> None:
     }
     findings = check_gha001(data, [], "fake.yml")
     assert not findings
+
+
+def test_gha003_detects_head_ref_flat_variable() -> None:
+    """github.head_ref (flat context variable) in ref must trigger GHA-003 (CB-4/FN-1)."""
+    data = {
+        True: "pull_request_target",
+        "jobs": {
+            "ci": {
+                "steps": [
+                    {
+                        "uses": "actions/checkout@v3",
+                        "with": {"ref": "${{ github.head_ref }}"},
+                    }
+                ]
+            }
+        },
+    }
+    findings = check_gha003(data, ["pull_request_target"], "fake.yml")
+    assert any(f.rule_id == "GHA-003" for f in findings)

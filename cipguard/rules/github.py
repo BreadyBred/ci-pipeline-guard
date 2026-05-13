@@ -150,7 +150,7 @@ def check_gha003(data: dict, lines: list[str], file: str) -> list[Finding]:
             if not isinstance(with_val, dict):
                 continue
             ref = str(with_val.get("ref", ""))
-            if "head.sha" in ref or "head.ref" in ref:
+            if "head.sha" in ref or "head.ref" in ref or "head_ref" in ref:
                 line = find_line(lines, "pull_request_target")
                 findings.append(
                     Finding(
