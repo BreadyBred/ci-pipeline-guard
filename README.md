@@ -101,3 +101,16 @@ Run with coverage:
 ```
 pytest --cov=cipguard --cov-report=term-missing
 ```
+
+---
+
+## Windows notes
+
+On Windows terminals with a non-UTF-8 code page (e.g. cp1252), box-drawing
+characters used in the table output may fail to encode.  The scanner detects
+this at runtime and automatically falls back to ASCII box characters so output
+is never corrupted.
+
+JSON output (`--format json`) always uses plain ASCII and is unaffected.
+
+The `--output FILE` flag writes UTF-8 regardless of the terminal encoding.

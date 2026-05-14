@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import TextIO
 
@@ -42,8 +43,18 @@ def _severity_counts(findings: list[Finding]) -> dict[Severity, int]:
 def _open_console(output_file: str | None) -> tuple[Console, TextIO | None]:
     if output_file:
         fh: TextIO = open(output_file, "w", encoding="utf-8")
-        return Console(file=fh, highlight=False), fh
-    return Console(highlight=False), None
+        try:
+            return Console(file=fh, highlight=False), fh
+        except Exception:
+            fh.close()
+            raise
+    encoding = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+    try:
+        "─".encode(encoding)
+        safe_box = False
+    except (UnicodeEncodeError, LookupError):
+        safe_box = True
+    return Console(highlight=False, safe_box=safe_box), None
 
 
 def render_table(
@@ -120,8 +131,9 @@ def render_json(
     output_file: str | None = None,
 ) -> None:
     all_findings = [f for findings in findings_by_file.values() for f in findings]
+    score = _calculate_score(all_findings)
     payload = json.dumps(
-        [f.model_dump() for f in all_findings],
+        {"score": score, "findings": [f.model_dump() for f in all_findings]},
         indent=2,
         default=str,
     )
