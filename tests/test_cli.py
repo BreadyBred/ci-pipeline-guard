@@ -26,9 +26,9 @@ def _runner() -> CliRunner:
 # ---------------------------------------------------------------------------
 
 
-def test_cli_scan_table_exits_zero_with_findings() -> None:
+def test_cli_scan_table_exits_nonzero_with_findings() -> None:
     result = _runner().invoke(cli, ["scan", str(GH_FIXTURE)])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_cli_scan_table_contains_rule_id() -> None:
@@ -52,20 +52,21 @@ def test_cli_scan_table_both_fixtures() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_cli_scan_json_exits_zero_with_findings() -> None:
+def test_cli_scan_json_exits_nonzero_with_findings() -> None:
     result = _runner().invoke(cli, ["scan", str(GH_FIXTURE), "--format", "json"])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_cli_scan_json_output_is_valid_json() -> None:
     result = _runner().invoke(cli, ["scan", str(GH_FIXTURE), "--format", "json"])
     data = json.loads(result.output)
-    assert isinstance(data, list)
+    assert isinstance(data, dict)
+    assert "score" in data and "findings" in data
 
 
 def test_cli_scan_json_finding_has_required_keys() -> None:
     result = _runner().invoke(cli, ["scan", str(GL_FIXTURE), "--format", "json"])
-    obj = json.loads(result.output)[0]
+    obj = json.loads(result.output)["findings"][0]
     assert {"rule_id", "severity", "file", "line", "finding", "recommendation"} <= obj.keys()
 
 
@@ -77,7 +78,7 @@ def test_cli_scan_json_finding_has_required_keys() -> None:
 def test_cli_scan_output_flag_creates_file(tmp_path: Path) -> None:
     out = tmp_path / "report.txt"
     result = _runner().invoke(cli, ["scan", str(GH_FIXTURE), "--output", str(out)])
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert out.exists()
     assert "GHA-001" in out.read_text(encoding="utf-8")
 
@@ -87,10 +88,11 @@ def test_cli_scan_json_output_flag_creates_valid_json(tmp_path: Path) -> None:
     result = _runner().invoke(
         cli, ["scan", str(GH_FIXTURE), "--format", "json", "--output", str(out)]
     )
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert isinstance(data, list)
-    assert data  # non-empty
+    assert isinstance(data, dict)
+    assert "score" in data
+    assert data["findings"]  # non-empty
 
 
 # ---------------------------------------------------------------------------
@@ -117,5 +119,5 @@ def test_cli_scan_directory_with_ci_files(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     result = _runner().invoke(cli, ["scan", str(tmp_path)])
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "GHA-001" in result.output

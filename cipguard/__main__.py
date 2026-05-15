@@ -48,6 +48,10 @@ def scan(path: Path, fmt: str, output_file: str | None) -> None:
     else:
         render_table(results, output_file)
 
+    total = sum(len(fs) for fs in results.values())
+    if total:
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     cli()
