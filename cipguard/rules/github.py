@@ -10,31 +10,13 @@ from cipguard.utils import (
 )
 
 
-def _find_uses_line(lines: list[str], uses: str) -> int | None:
-    """Return the 1-based line number of a 'uses: <uses>' occurrence.
-
-    Scans for a line containing the full uses string.  When the action is
-    pinned (contains '@'), we must not land on a line where the name portion
-    appears before a different '@' (e.g. the pinned variant of the same action).
-    """
-    action_name = uses.split("@")[0] if "@" in uses else uses
-    for i, line in enumerate(lines, 1):
-        if uses in line:
-            return i
-        # For unpinned refs: accept a line that contains the action name
-        # followed by '@' only if the full 'uses' string wasn't found above.
-    # Fallback: just find the action name
-    from cipguard.utils import find_line
-    return find_line(lines, action_name)
-
-
-def _get_github_jobs(data: dict) -> dict[str, dict]:
-    """Return job entries that are dicts (skip None or non-dict values)."""
-    return {
-        name: job
-        for name, job in (data.get("jobs") or {}).items()
-        if isinstance(job, dict)
-    }
+def _get_github_jobs(data: dict) -> dict:
+    """Return only dict-valued job entries, guarding against malformed YAML
+    where jobs: is a list or individual job values are not dicts."""
+    jobs = data.get("jobs")
+    if not isinstance(jobs, dict):
+        return {}
+    return {name: job for name, job in jobs.items() if isinstance(job, dict)}
 
 
 def _iter_env_blocks(data: dict):
@@ -44,17 +26,37 @@ def _iter_env_blocks(data: dict):
         for k, v in env.items():
             yield k, v, "workflow env"
     for job_name, job in _get_github_jobs(data).items():
-        job_env = job.get("env")
-        if isinstance(job_env, dict):
-            for k, v in job_env.items():
+        env = job.get("env")
+        if isinstance(env, dict):
+            for k, v in env.items():
                 yield k, v, f"job {job_name!r} env"
         for step in job.get("steps") or []:
             if not isinstance(step, dict):
                 continue
-            step_env = step.get("env")
-            if isinstance(step_env, dict):
-                for k, v in step_env.items():
+            env = step.get("env")
+            if isinstance(env, dict):
+                for k, v in env.items():
                     yield k, v, f"job {job_name!r} step env"
+
+
+def _find_uses_line(lines: list[str], uses: str, start: int = 0) -> int | None:
+    """Find the line that references *uses* WITHOUT an '@' immediately following it.
+
+    This distinguishes `uses: actions/checkout` (unpinned) from
+    `uses: actions/checkout@v3` (pinned to a tag) when both appear in the file.
+    Pure comment lines are skipped.
+    """
+    for i, line in enumerate(lines[start:], start + 1):
+        if line.lstrip().startswith("#"):
+            continue
+        idx = line.find(uses)
+        if idx == -1:
+            continue
+        after = idx + len(uses)
+        if after < len(line) and line[after] == "@":
+            continue  # this occurrence is a pinned version of the same action
+        return i
+    return None
 
 
 def check_gha001(data: dict, lines: list[str], file: str) -> list[Finding]:
@@ -78,7 +80,7 @@ def check_gha001(data: dict, lines: list[str], file: str) -> list[Finding]:
                 ref = uses.split("@", 1)[1]
                 if SHA_RE.match(ref):
                     continue
-                line = _find_uses_line(lines, uses)
+                line = find_line(lines, uses)
                 msg = f"Action '{uses}' pinned to '{ref}' instead of a full commit SHA"
                 rec = "Pin to a full 40-character commit SHA to prevent supply chain attacks"
             key = (uses, line)
@@ -150,6 +152,8 @@ def check_gha003(data: dict, lines: list[str], file: str) -> list[Finding]:
             if not isinstance(with_val, dict):
                 continue
             ref = str(with_val.get("ref", ""))
+            # head.sha / head.ref cover github.event.pull_request.head.{sha,ref};
+            # head_ref covers the flat github.head_ref context variable.
             if "head.sha" in ref or "head.ref" in ref or "head_ref" in ref:
                 line = find_line(lines, "pull_request_target")
                 findings.append(
@@ -178,32 +182,30 @@ def check_gha004(data: dict, lines: list[str], file: str) -> list[Finding]:
     for job_name, job in _get_github_jobs(data).items():
         runs_on = job.get("runs-on")
         plain_self_hosted = runs_on == "self-hosted" or runs_on == ["self-hosted"]
-        has_self_hosted = (
-            isinstance(runs_on, list)
-            and "self-hosted" in runs_on
-            and len(runs_on) > 1
+        # Advance search_from past ANY job that references self-hosted (flagged or not)
+        # to prevent a multi-label runner sitting between two plain runners from
+        # causing the second plain runner's finding to land on the wrong line.
+        has_self_hosted = plain_self_hosted or (
+            isinstance(runs_on, list) and "self-hosted" in runs_on
         )
         if has_self_hosted:
             line = find_line(lines, "self-hosted", search_from)
             if line is not None:
                 search_from = line
-        if plain_self_hosted:
-            line = find_line(lines, "self-hosted", search_from)
-            if line is not None:
-                search_from = line
-            findings.append(
-                Finding(
-                    rule_id="GHA-004",
-                    severity=Severity.MEDIUM,
-                    file=file,
-                    line=line,
-                    finding=f"Job '{job_name}' uses self-hosted runner with no scoping labels",
-                    recommendation=(
-                        "Add runner-group or environment labels to restrict execution, "
-                        "e.g. runs-on: [self-hosted, linux, production]"
-                    ),
+            if plain_self_hosted:
+                findings.append(
+                    Finding(
+                        rule_id="GHA-004",
+                        severity=Severity.MEDIUM,
+                        file=file,
+                        line=line,
+                        finding=f"Job '{job_name}' uses self-hosted runner with no scoping labels",
+                        recommendation=(
+                            "Add runner-group or environment labels to restrict execution, "
+                            "e.g. runs-on: [self-hosted, linux, production]"
+                        ),
+                    )
                 )
-            )
     return findings
 
 
