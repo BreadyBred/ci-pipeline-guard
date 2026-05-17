@@ -92,7 +92,7 @@ python -m cipguard scan . --format json --output results.json
 Install dev dependencies, then run the full suite:
 
 ```
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pytest
 ```
 
